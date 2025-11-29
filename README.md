@@ -1,1 +1,0 @@
-# MyDailyManna_wPics
