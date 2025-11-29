@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Daily Quote</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: no-repeat center center fixed;
+      background-size: cover;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      padding: 20px;
+      transition: background-image 0.5s ease-in-out;
+    }
+
+    .box {
+      background: rgba(255, 255, 255, 0.85);
+      border-radius: 16px;
+      padding: 30px 40px;
+      max-width: 600px;
+      width: 100%;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.1);
+      text-align: center;
+      backdrop-filter: blur(4px);
+    }
+
+    h2 {
+      color: #1e40af;
+      margin-bottom: 20px;
+    }
+
+    p {
+      font-size: 1.3em;
+      color: #1f2937;
+      white-space: pre-wrap;
+    }
+
+    .ref {
+      margin-top: 15px;
+      font-weight: bold;
+      color: #6b7280;
+    }
+
+    .error {
+      color: #b91c1c;
+      font-size: 1em;
+      margin-top: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>Today's Encouragement</h2>
+    <p id="quote">Loading...</p>
+    <div class="ref" id="author"></div>
+    <div class="error" id="error"></div>
+  </div>
+
+  <script>
+    // Randomize background
+    function setRandomBackground() {
+      const totalImages = 5; // number of background images
+      const randomIndex = Math.floor(Math.random() * totalImages) + 1;
+      const bgImage = `background_${randomIndex}.jpg`;
+      document.body.style.backgroundImage = `url('${bgImage}')`;
+    }
+
+    // Load quote
+    async function loadQuote() {
+      const quoteEl = document.getElementById("quote");
+      const authorEl = document.getElementById("author");
+      const errEl = document.getElementById("error");
+
+      try {
+        const res = await fetch("quotes.json");
+        if (!res.ok) throw new Error("File not found");
+        
+        const quotes = await res.json();
+        const randomIndex = Math.floor(Math.random() * quotes.length);
+        const q = quotes[randomIndex];
+
+        quoteEl.textContent = q.quote;
+        authorEl.textContent = "— " + q.author;
+      } catch (e) {
+        quoteEl.textContent = "⚠️ Unable to load quotes.";
+        authorEl.textContent = "";
+        errEl.textContent = "Make sure quotes.json is in the same folder as index.html.";
+      }
+    }
+
+    setRandomBackground();
+    loadQuote();
+  </script>
+</body>
+</html>
