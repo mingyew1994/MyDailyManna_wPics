@@ -2,99 +2,229 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Daily Quote</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>Daily Bible Verse</title>
   <style>
+    :root { --pad: 16px; }
+
+    html, body { height: 100%; }
     body {
-      font-family: Arial, sans-serif;
-      background: no-repeat center center fixed;
-      background-size: cover;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
       margin: 0;
-      padding: 20px;
-      transition: background-image 0.5s ease-in-out;
-    }
-
-    .box {
-      background: rgba(255, 255, 255, 0.85);
-      border-radius: 16px;
-      padding: 30px 40px;
-      max-width: 600px;
-      width: 100%;
-      box-shadow: 0 6px 16px rgba(0,0,0,0.1);
-      text-align: center;
-      backdrop-filter: blur(4px);
-    }
-
-    h2 {
-      color: #1e40af;
-      margin-bottom: 20px;
-    }
-
-    p {
-      font-size: 1.3em;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       color: #1f2937;
+      background: url('background.png') no-repeat center center fixed;
+      background-size: cover;
+      background-color: #fff;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      padding: calc(env(safe-area-inset-top, 0px) + 10px) var(--pad) 10px;
+      background: linear-gradient(#ffffffcc, #ffffff99);
+      backdrop-filter: blur(3px);
+      -webkit-backdrop-filter: blur(3px);
+      z-index: 2;
+      text-align: center;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    header h2 {
+      margin: 0 0 6px;
+      font-size: 1.1rem;
+      color: #1e40af;
+    }
+    header p {
+      margin: 0;
+      font-size: 1rem;
+      line-height: 1.35;
       white-space: pre-wrap;
     }
-
-    .ref {
-      margin-top: 15px;
-      font-weight: bold;
+    header .ref {
+      margin-top: 6px;
+      font-size: 0.95rem;
+      font-weight: 600;
       color: #6b7280;
     }
-
-    .error {
+    header .error {
+      margin-top: 6px;
       color: #b91c1c;
-      font-size: 1em;
-      margin-top: 15px;
+      font-size: 0.9rem;
+    }
+
+    main {
+      padding: 10px var(--pad) calc(env(safe-area-inset-bottom, 0px) + 18px);
+      display: grid;
+      gap: 12px;
+      place-items: center;
+    }
+
+    .frame {
+      width: 100%;
+      max-width: 640px;
+      height: 70vh;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.07);
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+    }
+
+    #photo {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #fff;
+      user-select: none;
+      -webkit-user-drag: none;
+      transition: opacity 300ms ease;
+      opacity: 0; /* fade in smoothly */
+    }
+
+    .hint {
+      display: none;
+    }
+
+    @media (max-width: 380px) {
+      header h2 { font-size: 1rem; }
+      header p  { font-size: 0.95rem; }
+      header .ref { font-size: 0.9rem; }
     }
   </style>
 </head>
 <body>
-  <div class="box">
-    <h2>Today's Encouragement</h2>
-    <p id="quote">Loading...</p>
-    <div class="ref" id="author"></div>
+  <header>
+    <h2>Today's Verse</h2>
+    <p id="verse">Loading...</p>
+    <div class="ref" id="reference"></div>
     <div class="error" id="error"></div>
-  </div>
+  </header>
+
+  <main>
+    <figure class="frame" id="frame">
+      <img id="photo" alt="Daily photo" loading="eager" decoding="async"/>
+    </figure>
+  </main>
 
   <script>
-    // Randomize background
-    function setRandomBackground() {
-      const totalImages = 5; // number of background images
-      const randomIndex = Math.floor(Math.random() * totalImages) + 1;
-      const bgImage = `background_${randomIndex}.jpg`;
-      document.body.style.backgroundImage = `url('${bgImage}')`;
+    // ---- Image Slideshow Config ----
+    const TOTAL_IMAGES = 18;              // image_1.jpg … image_18.jpg
+    const USE_CACHE_BUST = false;         // flip true if browser caches too hard
+    const INTERVAL_MS = 5000;             // change every 5 seconds
+    const IMAGE_PREFIX = 'image_';
+    const IMAGE_EXT = '.jpg';             // change if you use .png, etc.
+
+    let order = [];       // shuffled indices, e.g. [7, 3, 15, ...]
+    let cursor = 0;       // where we are in the shuffled list
+    let timerId = null;
+
+    // Respect reduced motion settings
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // Fisher–Yates shuffle
+    function shuffle(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
     }
 
-    // Load quote
-    async function loadQuote() {
-      const quoteEl = document.getElementById("quote");
-      const authorEl = document.getElementById("author");
-      const errEl = document.getElementById("error");
+    function newOrder() {
+      order = shuffle(Array.from({ length: TOTAL_IMAGES }, (_, i) => i + 1));
+      cursor = 0;
+    }
 
-      try {
-        const res = await fetch("quotes.json");
-        if (!res.ok) throw new Error("File not found");
-        
-        const quotes = await res.json();
-        const randomIndex = Math.floor(Math.random() * quotes.length);
-        const q = quotes[randomIndex];
+    function nextFromOrder() {
+      if (order.length === 0 || cursor >= order.length) newOrder();
+      return order[cursor++];
+    }
 
-        quoteEl.textContent = q.quote;
-        authorEl.textContent = "— " + q.author;
-      } catch (e) {
-        quoteEl.textContent = "⚠️ Unable to load quotes.";
-        authorEl.textContent = "";
-        errEl.textContent = "Make sure quotes.json is in the same folder as index.html.";
+    function pickNextImage() {
+      const i = nextFromOrder();
+      const base = `${IMAGE_PREFIX}${i}${IMAGE_EXT}`;
+      return USE_CACHE_BUST ? `${base}?v=${Date.now()}` : base;
+    }
+
+    function setPhoto(src) {
+      const img = document.getElementById('photo');
+
+      const pre = new Image();
+      pre.onload = () => {
+        img.style.opacity = '0';
+        requestAnimationFrame(() => {
+          img.src = pre.src;
+          requestAnimationFrame(() => { img.style.opacity = '1'; });
+        });
+      };
+      pre.onerror = () => {
+        // Skip missing file and move on
+        setPhoto(pickNextImage());
+      };
+      pre.src = src;
+    }
+
+    function setNextPhoto() {
+      setPhoto(pickNextImage());
+    }
+
+    function startSlideshow() {
+      if (prefersReducedMotion) return;
+      stopSlideshow();
+      timerId = setInterval(setNextPhoto, INTERVAL_MS);
+    }
+
+    function stopSlideshow() {
+      if (timerId !== null) {
+        clearInterval(timerId);
+        timerId = null;
       }
     }
 
-    setRandomBackground();
-    loadQuote();
+    // Pause slideshow when page is hidden
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) stopSlideshow();
+      else startSlideshow();
+    });
+
+    // Refresh positioning on orientation change (mobile polish)
+    window.addEventListener('orientationchange', () => {
+      const img = document.getElementById('photo');
+      img.style.transform = 'translateZ(0)';
+      setTimeout(() => { img.style.transform = ''; }, 200);
+    });
+
+    // ---- Bible Verse Loader (OurManna API) ----
+    async function loadVerse() {
+      const verseEl = document.getElementById("verse");
+      const refEl   = document.getElementById("reference");
+      const errEl   = document.getElementById("error");
+
+      try {
+        const url = "https://beta.ourmanna.com/api/v1/get/?format=json&order=random&t=" + Date.now();
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Verse API error");
+
+        const json = await res.json();
+        const det = json.verse.details;
+
+        verseEl.textContent = det.text;
+        refEl.textContent   = det.reference || "";
+        errEl.textContent   = "";
+      } catch (e) {
+        verseEl.textContent = "⚠️ Unable to load verse.";
+        refEl.textContent = "";
+        errEl.textContent = "Please check your internet connection and try again.";
+      }
+    }
+
+    // ---- Init ----
+    newOrder();       // prepare shuffled sequence
+    setNextPhoto();   // show first image
+    loadVerse();      // load random verse
+    startSlideshow(); // start cycling every 5s
   </script>
 </body>
 </html>
